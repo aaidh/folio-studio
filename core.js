@@ -15,6 +15,7 @@ export const escapeHTML = value => String(value ?? '').replace(/[&<>"']/g, c=>({
 export function safeURL(value) {
   const text = String(value ?? '').trim();
   if (!text) return '';
+  if (/^[a-z][a-z0-9+.-]*:/i.test(text) && !/^https?:\/\//i.test(text)) return '';
   try {const url = new URL(/^https?:\/\//i.test(text) ? text : `https://${text}`);return ['https:', 'http:'].includes(url.protocol) && !url.username && !url.password && !/[\s<>]/.test(text) && !/^[a-z]+:(?!\/\/)/i.test(text) ? url.href : '';} catch {return '';}
 }
 export function normalize(input) {
