@@ -20,7 +20,7 @@ A professional portfolio builder with a calm editing experience, live preview, a
 2. Add your best projects, work experience, or education.
 3. Choose the contact details you want to publish.
 4. Pick a layout, accent colour, and headline style.
-5. Download your complete `index.html` website.
+5. Click **Download portfolio** and choose Website, PDF, PNG, or JPG.
 
 The first visit includes fictional example content so you can explore the design. Use **Start fresh** to create an empty portfolio. Replace the examples before publishing.
 
@@ -37,6 +37,8 @@ The first visit includes fictional example content so you can explore the design
 | Local drafts | Automatic browser saving, with a warning if storage is unavailable |
 | Draft portability | Export and import a versioned JSON draft for later editing |
 | Website export | One HTML file containing your content, styles, and photo |
+| PNG and JPG export | Full-length desktop or mobile images, with standard or high resolution |
+| PDF export | A4 pages with balanced page breaks, preserving the selected design |
 | Accessibility | Labelled inputs, keyboard focus styles, native dialogs, reduced motion support |
 
 The exported website uses system fonts, has no JavaScript or third-party dependencies, and can be opened offline. The builder requests Google Fonts for its interface; portfolio content and uploaded images are not sent to a server. There are no analytics or accounts.
@@ -57,7 +59,18 @@ Open `http://127.0.0.1:4175`. Because the builder uses ES modules, serve it over
 npm test
 ```
 
-Tests cover complete exports, every layout, unsafe links, HTML injection, imported draft boundaries, and optional sections. GitHub Actions runs the checks on pushes and pull requests.
+The 11 automated tests cover complete exports, every layout, unsafe links, HTML injection, imported draft boundaries, optional sections, image size limits, PDF pagination, and download filenames. GitHub Actions runs the checks on pushes and pull requests.
+
+## Download formats
+
+- **Website (HTML):** an editable, accessible website with working navigation and links. Best for hosting.
+- **PNG:** a lossless, full-length image. Best for crisp screenshots and sharing your design.
+- **JPG:** a smaller, full-length image with an opaque background. Best for quick sharing.
+- **PDF:** an A4 document preserving your design as page images. Text is not selectable and links are not interactive; choose HTML for those features.
+
+Image and PDF exports offer desktop (1024 px) and mobile (390 px) layouts and standard or 2× resolution. Very long portfolios automatically reduce image resolution to stay within browser memory limits. All exports run locally using the bundled html2canvas and jsPDF libraries, with their licenses included in `vendor/`.
+
+The export libraries are already included, so normal use needs no installation. Maintainers can reproduce them with `npm ci` and `npm run vendor` using the pinned versions in the lockfile.
 
 ## Publish your generated portfolio
 
@@ -77,6 +90,9 @@ style.css        Responsive editor interface
 app.js           Editing, local storage, photo upload, and downloads
 core.js          Draft validation and standalone portfolio renderer
 core.test.js     Export and validation tests
+export.js        Local image capture and PDF pagination
+export.test.js   Image size and PDF page boundary checks
+vendor/          Pinned browser export libraries and licenses
 server.mjs       Dependency-free local preview server
 ```
 
@@ -91,6 +107,7 @@ Small, focused improvements are welcome. Open an issue describing a problem or e
 - Project artwork is generated from the title and category; custom project image uploads are not yet supported.
 - The preview intentionally restricts outgoing navigation. Links work normally in your downloaded website.
 - Website downloads do not publish automatically; hosting instructions are available in the builder.
+- PDFs preserve visual layout as raster images. Use the website download when searchable text, screen-reader access, or clickable links are required.
 
 ## License
 

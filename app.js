@@ -1,4 +1,5 @@
 import {sample, blank, normalize, renderPortfolio, escapeHTML as e, safeURL, accents} from './core.js';
+import {exportVisual} from './export.js';
 
 const $ = selector => document.querySelector(selector);
 const storageKey = 'folio-studio-v1';
@@ -15,6 +16,15 @@ const intros = {
   design:['Find your own expression.','Choose a starting point. Your content stays with you.']
 };
 function toast(message) {$('#toast').textContent=message;$('#toast').hidden=false;clearTimeout(toastTimer);toastTimer=setTimeout(()=>$('#toast').hidden=true,4500);}
+function confirmChange(message, label='Continue') {
+  return new Promise(resolve=>{
+    const dialog=$('#confirm-dialog');$('#confirm-message').textContent=message;$('#confirm-accept').textContent=label;
+    let result=false;
+    $('#confirm-accept').onclick=()=>{result=true;dialog.close();};
+    $('#confirm-cancel').onclick=()=>dialog.close();
+    dialog.addEventListener('close',()=>resolve(result),{once:true});dialog.showModal();$('#confirm-cancel').focus();
+  });
+}
 function save() {
   try {localStorage.setItem(storageKey,JSON.stringify(draft));storageOK=true;$('#save-status').textContent='Saved on this device';}
   catch {storageOK=false;$('#save-status').textContent='Download a draft to keep your work';}
@@ -40,29 +50,53 @@ function renderFields() {
   $('#fields').innerHTML=html;
   $('#step-count').textContent=`0${steps.indexOf(step)+1} / 05`;
   $('#step-hint').textContent=step==='design'?'Looking good. Make it yours.':`Step ${steps.indexOf(step)+1} of 5 · Changes save automatically.`;
-  $('#next').textContent=step==='design'?'Download website ↗':`Next: ${names[steps[steps.indexOf(step)+1]]} →`;
+  $('#next').textContent=step==='design'?'Download portfolio ↗':`Next: ${names[steps[steps.indexOf(step)+1]]} →`;
   document.querySelectorAll('[data-step]').forEach(b=>{b.classList.toggle('active',b.dataset.step===step);if(b.dataset.step===step)b.setAttribute('aria-current','step');else b.removeAttribute('aria-current');});
 }
 function changeStep(next) {step=next;renderFields();$('#editor-form').scrollTop=0;}
 function download(filename,content,type) {const url=URL.createObjectURL(new Blob([content],{type}));const a=document.createElement('a');a.href=url;a.download=filename;a.click();setTimeout(()=>URL.revokeObjectURL(url),2000);}
-function exportWebsite() {
-  if(!draft.name.trim()){changeStep('profile');$('#input-name').focus();toast('Add your name before downloading your website.');return;}
+function validateExport() {
+  if(!draft.name.trim()){changeStep('profile');$('#input-name').focus();toast('Add your name before downloading your portfolio.');return false;}
   const invalid = ['github','linkedin','website'].filter(k=>draft[k]&&!safeURL(draft[k]));
   if(draft.projects.some(p=>p.url&&!safeURL(p.url))) invalid.push('project links');
   if(draft.email&&!/^[^\s@<>]+@[^\s@<>]+\.[^\s@<>]+$/.test(draft.email)) invalid.push('email');
-  if(invalid.length){toast(`Please check your ${invalid.join(', ')} before downloading.`);return;}
-  download('index.html',renderPortfolio(draft),'text/html;charset=utf-8');toast('Your website is ready. See “How to publish” to put it online.');
+  if(invalid.length){toast(`Please check your ${invalid.join(', ')} before downloading.`);return false;}
+  return true;
 }
+function openExport(){if(validateExport()){$('#export-progress').textContent='';$('#export-dialog').showModal();}}
+let exporting=false;
+function updateExportOptions(){
+  const format=new FormData($('#export-form')).get('format');
+  $('#visual-options').hidden=format==='html';
+  $('#download-selected').textContent=`Download ${{html:'website',png:'PNG',jpeg:'JPG',pdf:'PDF'}[format]} ↗`;
+  $('#format-note').textContent=format==='pdf'?'Your full portfolio is placed on A4 pages. Text is rendered as an image to preserve your design.':'Images include the entire portfolio. Long portfolios may use a lower resolution to fit your browser’s image limits.';
+  $('#export-progress').textContent='';
+}
+$('#export-form').addEventListener('change',updateExportOptions);
+$('#export-form').addEventListener('submit',async ev=>{
+  ev.preventDefault();if(exporting)return;
+  const format=new FormData($('#export-form')).get('format');
+  if(format==='html'){download('index.html',renderPortfolio(draft),'text/html;charset=utf-8');$('#export-progress').textContent='Website downloaded. Use “How to publish” to put it online.';return;}
+  exporting=true;const button=$('#download-selected');button.disabled=true;
+  $('#export-form').querySelectorAll('input,select').forEach(input=>input.disabled=true);
+  try {
+    const result=await exportVisual(structuredClone(draft),{format,width:Number($('#export-width').value),scale:Number($('#export-scale').value),onProgress:message=>$('#export-progress').textContent=message});
+    download(result.filename,result.blob,result.blob.type);
+    $('#export-progress').textContent=`Your ${format==='jpeg'?'JPG':format.toUpperCase()} is ready. Check your downloads.`;
+  }catch(error){$('#export-progress').textContent=error.message||'Download failed. Please try again.';}
+  finally{exporting=false;button.disabled=false;$('#export-form').querySelectorAll('input,select').forEach(input=>input.disabled=false);}
+});
+$('#export-dialog').addEventListener('cancel',ev=>{if(exporting)ev.preventDefault();});
 $('#editor-form').addEventListener('submit',ev=>ev.preventDefault());
 $('#editor-form').addEventListener('input',ev=>{
   const key=ev.target.dataset.key;if(!key)return;
   const path=key.split('.');if(path.length===3)draft[path[0]][Number(path[1])][path[2]]=ev.target.value;else draft[key]=ev.target.value;
   update();
 });
-$('#fields').addEventListener('click',ev=>{
+$('#fields').addEventListener('click',async ev=>{
   const button=ev.target.closest('button');if(!button)return;
   if(button.id==='add-item') {draft[step].push(step==='projects'?{title:'',category:'',description:'',url:''}:{title:'',company:'',period:'',description:''});renderFields();$('#editor-form').scrollTop=$('#editor-form').scrollHeight;}
-  else if(button.dataset.remove!==undefined) {const i=Number(button.dataset.remove);if(!confirm('Remove this entry from your draft?'))return;draft[step].splice(i,1);renderFields();}
+  else if(button.dataset.remove!==undefined) {const i=Number(button.dataset.remove);if(!await confirmChange('Remove this entry from your draft?','Remove entry'))return;draft[step].splice(i,1);renderFields();}
   else if(button.dataset.move!==undefined) {const i=Number(button.dataset.move);if(i>0)[draft[step][i],draft[step][i-1]]=[draft[step][i-1],draft[step][i]];renderFields();}
   else if(button.dataset.template) {draft.template=button.dataset.template;renderFields();}
   else if(button.dataset.accent) {draft.accent=button.dataset.accent;renderFields();}
@@ -79,21 +113,21 @@ $('#fields').addEventListener('change',async ev=>{
   }catch{toast('That image could not be opened. Try another photo.');}
 });
 document.querySelectorAll('[data-step]').forEach(b=>b.addEventListener('click',()=>changeStep(b.dataset.step)));
-$('#next').addEventListener('click',()=>step==='design'?exportWebsite():changeStep(steps[steps.indexOf(step)+1]));
-$('#export').addEventListener('click',exportWebsite);
+$('#next').addEventListener('click',()=>step==='design'?openExport():changeStep(steps[steps.indexOf(step)+1]));
+$('#export').addEventListener('click',openExport);
 for(const mode of ['desktop','mobile']) $('#'+mode).addEventListener('click',()=>{
   $('.browser-shell').classList.toggle('mobile',mode==='mobile');for(const other of ['desktop','mobile']){$('#'+other).classList.toggle('selected',other===mode);$('#'+other).setAttribute('aria-pressed',String(other===mode));}
 });
 $('#backup').addEventListener('click',()=>{download('folio-studio-draft.json',JSON.stringify({version:1,portfolio:draft},null,2),'application/json');toast('Draft saved. Import it here whenever you want to keep editing.');});
 $('#import').addEventListener('change',async ev=>{
   const file=ev.target.files?.[0];if(!file)return;
-  try {if(file.size>4*1024*1024)throw new Error('Draft files must be smaller than 4 MB.');const parsed=JSON.parse(await file.text());if(parsed.version!==1||!parsed.portfolio||typeof parsed.portfolio.name!=='string')throw new Error('Choose a draft exported from Folio Studio.');const next=normalize(parsed.portfolio);if(!confirm('Replace your current draft with this imported draft?'))return;draft=next;save();renderFields();preview();toast('Draft imported. Welcome back.');}
+  try {if(file.size>4*1024*1024)throw new Error('Draft files must be smaller than 4 MB.');const parsed=JSON.parse(await file.text());if(parsed.version!==1||!parsed.portfolio||typeof parsed.portfolio.name!=='string')throw new Error('Choose a draft exported from Folio Studio.');const next=normalize(parsed.portfolio);if(!await confirmChange('Replace your current draft with this imported draft?','Import draft'))return;draft=next;save();renderFields();preview();toast('Draft imported. Welcome back.');}
   catch(err){toast(err instanceof SyntaxError?'This file is not valid JSON. Choose a Folio Studio draft.':err.message);}
   finally{ev.target.value='';}
 });
-$('#reset').addEventListener('click',()=>{if(confirm('Start an empty portfolio? Your current draft will be replaced. Save a draft file first if you want to keep it.')){draft=structuredClone(blank);step='profile';save();renderFields();preview();toast('A fresh start. Tell your story.');}});
+$('#reset').addEventListener('click',async()=>{if(await confirmChange('Start an empty portfolio? Your current draft will be replaced. Save a draft file first if you want to keep it.','Start fresh')){draft=structuredClone(blank);step='profile';save();renderFields();preview();toast('A fresh start. Tell your story.');}});
 $('#help').addEventListener('click',()=>$('#help-dialog').showModal());
 $('#fullscreen').addEventListener('click',()=>{$('#preview-dialog iframe').srcdoc=renderPortfolio(draft);$('#preview-dialog').showModal();});
-document.querySelectorAll('.close-dialog').forEach(b=>b.addEventListener('click',()=>b.closest('dialog').close()));
+document.querySelectorAll('.close-dialog').forEach(b=>b.addEventListener('click',()=>{if(b.closest('dialog').id==='export-dialog'&&exporting)return;b.closest('dialog').close();}));
 renderFields();preview();
 if(!storageOK) {$('#save-status').textContent='Save a draft file to keep your work';toast('Browser saving is unavailable. Use “Save draft file” to keep your work.');}

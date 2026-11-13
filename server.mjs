@@ -7,4 +7,4 @@ const mime={'.html':'text/html','.css':'text/css','.js':'text/javascript','.svg'
 http.createServer(async(req,res)=>{
   try {const pathname=decodeURIComponent(new URL(req.url,'http://localhost').pathname);const file=path.resolve(root,'.'+(pathname==='/'?'/index.html':pathname));if(!file.startsWith(root)||pathname.includes('/.')){res.writeHead(403).end();return;}const bytes=await readFile(file);res.writeHead(200,{'Content-Type':mime[path.extname(file)]||'application/octet-stream','Cache-Control':'no-store'}).end(bytes);}
   catch{res.writeHead(404).end('Not found');}
-}).listen(4175,'127.0.0.1',()=>console.log('Folio Studio: http://127.0.0.1:4175'));
+}).listen(Number(process.env.PORT)||4175,'127.0.0.1',function(){console.log(`Folio Studio: http://127.0.0.1:${this.address().port}`);});

@@ -1,1 +1,9 @@
-{"name":"folio-studio","version":"1.0.0","private":true,"type":"module","description":"A private, browser-based portfolio builder with portable HTML export.","scripts":{"test":"node --test","start":"node server.mjs"}}
+{
+  "name": "folio-studio",
+  "version": "1.1.0",
+  "private": true,
+  "type": "module",
+  "description": "A private portfolio builder with HTML, PNG, JPG and PDF downloads.",
+  "scripts": {"test":"node --test", "start":"node server.mjs", "vendor":"node scripts/vendor.mjs"},
+  "devDependencies": {"html2canvas":"1.4.1", "jspdf":"4.2.1"}
+}
